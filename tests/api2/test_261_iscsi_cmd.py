@@ -300,8 +300,16 @@ def add_file_extent_target_lun(config, lun, filesize_mb=512, extent_name=None):
 
 @contextlib.contextmanager
 def configured_target_to_zvol_extent(config, target_name, zvol, alias=None, extent_name='zvol_extent', volsize_mb=512):
-    portal_id = config['portal']['id']
-    with target(target_name, [{'portal': portal_id}], alias) as target_config:
+    groups = []
+    if config['portal']:
+        group = {}
+        if portal_id := config['portal'].get('id'):
+            group['portal'] = portal_id
+        if initiator_id := config['initiator'].get('id'):
+            group['initiator'] = initiator_id
+        if group:
+            groups = [group]
+    with target(target_name, groups, alias) as target_config:
         target_id = target_config['id']
         with zvol_dataset(zvol, volsize_mb) as dataset_config:
             with zvol_extent(zvol, extent_name=extent_name) as extent_config:
@@ -613,6 +621,34 @@ def test__readwrite16_zvol_extent(iscsi_running):
         with configured_target_to_zvol_extent(config, target_name, zvol):
             iqn = f'{basename}:{target_name}'
             target_test_readwrite16(truenas_server.ip, iqn)
+
+
+def test__initiators(iscsi_running):
+    """
+    Ensure that only permitted initiators are able to access
+    a target.
+    """
+    initiator_base = f"iqn.2018-01.org.pyscsi:{socket.gethostname()}"
+    initiator_iqn1 = f"{initiator_base}:one"
+    initiator_iqn2 = f"{initiator_base}:two"
+    initiator_iqn3 = f"{initiator_base}:three"
+
+    with initiator('Restricted', initiators=[initiator_iqn1, initiator_iqn3]) as initiator_config:
+        with portal() as portal_config:
+            config = {
+                'initiator': initiator_config,
+                'portal': portal_config,
+            }
+            with configured_target_to_zvol_extent(config, target_name, zvol):
+                iqn = f'{basename}:{target_name}'
+                with iscsi_scsi_connection(truenas_server.ip, iqn, initiator_name=initiator_iqn1) as s:
+                    TUR(s)
+                with pytest.raises(RuntimeError) as ve:
+                    with iscsi_scsi_connection(truenas_server.ip, iqn, initiator_name=initiator_iqn2) as s:
+                        TUR(s)
+                assert 'Unable to connect to' in str(ve), ve
+                with iscsi_scsi_connection(truenas_server.ip, iqn, initiator_name=initiator_iqn3) as s:
+                    TUR(s)
 
 
 @skip_invalid_initiatorname
