@@ -224,6 +224,13 @@ class NVMETargetService(PseudoServiceBase):
             [],
         )
 
+    async def failure_logs(self):
+        if (await self.middleware.call('nvmet.global.config'))['kernel']:
+            return None
+        else:
+            service_object = await self.middleware.call('service.object', "nvmf")
+            return await service_object.failure_logs()
+
 
 class NVMfService(SimpleService):
     name = "nvmf"
