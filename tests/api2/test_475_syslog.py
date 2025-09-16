@@ -172,24 +172,24 @@ def test_remote_syslog_function(erase_syslogservers):
     assert data['syslogservers'] == [{'host': remote_ip, 'transport': 'TCP', 'tls_certificate': None}]
     check_syslog_state()
 
-    with open(SYSLOG_CONF, 'a') as conf_file:
-        # Configure to listen for TCP syslog messages on port 611 and log them to `test_log`.
-        # This temporary configuration is removed by `erase_syslogservers` on test completion.
-        conf_file.write(
-            'source s_test_remote {\n'
-            '  network(\n'
-            '    ip(0.0.0.0)\n'
-           f'    port({remote_port})\n'
-            '    transport(tcp)\n'
-            '  );\n'
-            '};\n\n'
+    # Configure to listen for TCP syslog messages on port 611 and log them to `test_log`.
+    # This temporary configuration is removed by `erase_syslogservers` on test completion.
+    server_config = (
+        'source s_test_remote {\n'
+        '  network(\n'
+        '    ip(0.0.0.0)\n'
+        f'    port({remote_port})\n'
+        '    transport(tcp)\n'
+        '  );\n'
+        '};\n\n'
 
-            'destination d_test_remote {\n'
-           f'  file({test_log});\n'
-            '};\n\n'
+        'destination d_test_remote {\n'
+        f'  file({test_log});\n'
+        '};\n\n'
 
-            'log { source(s_test_remote); destination(d_test_remote); };'
-        )
+        'log { source(s_test_remote); destination(d_test_remote); };'
+    )
+    ssh(f'echo {server_config!r} >> {SYSLOG_CONF}')
     assert call('service.control', 'RESTART', 'syslog-ng', job=True)
     check_syslog_state()
 
