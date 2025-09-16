@@ -241,5 +241,5 @@ def test_remote_syslog_with_TLS(tls_cert, testing):
     assert conf['result'] is True, "Missing remote entry"
 
     for item in test_tls:
-        assert list(filter(lambda s: item in s, conf['output'].splitlines())) is not []
+        assert list(filter(lambda s: item in s, conf['output'].splitlines())) != []
     check_syslog_state()
