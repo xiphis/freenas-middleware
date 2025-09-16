@@ -6,6 +6,8 @@ from middlewared.test.integration.utils import call, ssh
 from middlewared.test.integration.utils.client import truenas_server
 
 
+SYSLOG_CONF = '/etc/syslog-ng/syslog-ng.conf'
+
 # ---------------------------------------
 # ---------- utility functions ----------
 # ---------------------------------------
@@ -32,7 +34,7 @@ def check_syslog(log_path, message, target_user=user, target_passwd=password, re
     false positives.
     """
     if remote:
-        assert ha is True, "remote option is for HA only"
+        assert ha is True, 'remote option is for HA only'
 
     target_ip = truenas_server.ip if not remote else truenas_server.ha_ips()['standby']
     sleep_time = 1
@@ -64,7 +66,7 @@ def check_syslog_state(expected_state='active'):
 @pytest.fixture
 def erase_syslogservers():
     yield
-    call('system.advanced.update', {"syslogservers": []})
+    call('system.advanced.update', {'syslogservers': []})
     check_syslog_state()
 
 
@@ -147,7 +149,7 @@ def test_set_multiple_remote_syslog(erase_syslogservers):
     assert data['syslogservers'] == servers
 
     # Verify multiple destination blocks are generated in config
-    conf = ssh('cat /etc/syslog-ng/syslog-ng.conf', complete_response=True)
+    conf = ssh(f'cat {SYSLOG_CONF}', complete_response=True)
     assert conf['result'] is True
 
     # Count destination blocks - should have loghost0 and loghost1
@@ -170,7 +172,7 @@ def test_remote_syslog_function(erase_syslogservers):
     assert data['syslogservers'] == [{'host': remote_ip, 'transport': 'TCP', 'tls_certificate': None}]
     check_syslog_state()
 
-    with open('/var/log/syslog-ng/syslog-ng.conf', 'a') as conf_file:
+    with open(SYSLOG_CONF, 'a') as conf_file:
         # Configure to listen for TCP syslog messages on port 611 and log them to `test_log`.
         # This temporary configuration is removed by `erase_syslogservers` on test completion.
         conf_file.write(
@@ -205,31 +207,31 @@ def test_remote_syslog_with_TLS(tls_cert, testing):
             (For testing purposes use 'truenas_default' cert)
     The tls_cert fixture performs syslog cleanup.
     """
-    remote = "127.0.0.1"
-    port = "5140"
-    transport = "TLS"
+    remote = '127.0.0.1'
+    port = '5140'
+    transport = 'TLS'
 
-    test_tls = [
-        f'{remote}', f'port({port})', 'transport("tls")', 'ca-file("/etc/ssl/certs/ca-certificates.crt")'
-    ]
-    tls_payload = {"host": f"{remote}:{port}", "transport": transport}
+    # Fields to check for in the resulting syslog-ng.conf file
+    test_tls = [remote, f'port({port})', 'transport(tls)', 'ca-file("/etc/ssl/certs/ca-certificates.crt")']
+    tls_payload = {'host': f'{remote}:{port}', 'transport': transport}
 
-    if testing == "Mutual TLS":
+    if testing == 'Mutual TLS':
         test_tls += [
-            "key-file(\"/etc/certificates/truenas_default.key\")",
-            "cert-file(\"/etc/certificates/truenas_default.crt\")"
+            'key-file("/etc/certificates/truenas_default.key")',
+            'cert-file("/etc/certificates/truenas_default.crt")'
         ]
-        tls_payload["tls_certificate"] = tls_cert
+        tls_payload['tls_certificate'] = tls_cert
 
-    data = call('system.advanced.update', {"syslogservers": [tls_payload]})
+    data = call('system.advanced.update', {'syslogservers': [tls_payload]})
     assert data['syslogservers'][0]['transport'] == 'TLS'
 
     conf = ssh(
-        'grep -A10 "destination loghost" /etc/syslog-ng/syslog-ng.conf',
+        f'grep -A10 "destination loghost" {SYSLOG_CONF}',
         complete_response=True, check=False
     )
-    assert conf['result'] is True, "Missing remote entry"
+    assert conf['result'] is True, 'Missing remote entry'
 
+    # Assert syslog-ng.conf contains all fields in `test_tls`
+    file_lines = conf['output'].splitlines()
     for item in test_tls:
-        assert list(filter(lambda s: item in s, conf['output'].splitlines())) != []
-    check_syslog_state()
+        assert any(item in s for s in file_lines)
