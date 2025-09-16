@@ -4,7 +4,6 @@ import pytest
 from auto_config import ha, password, user
 from middlewared.test.integration.utils import call, ssh
 from middlewared.test.integration.utils.client import truenas_server
-from middlewared.test.integration.assets.system import standby_syslog_to_remote_syslog
 
 
 # ---------------------------------------
@@ -53,7 +52,7 @@ def check_syslog(log_path, message, target_user=user, target_passwd=password, re
 
 
 def check_syslog_state(expected_state='active'):
-    # Confirm syslog-ng is in requested state
+    """Confirm syslog-ng is in requested state."""
     syslog_state = ssh('systemctl is-active syslog-ng').strip()
     assert syslog_state == expected_state
 
@@ -156,53 +155,44 @@ def test_set_multiple_remote_syslog(erase_syslogservers):
     assert num_remotes == 2, conf['output']
 
 
-@pytest.mark.skip(reason="Test is unstable running from Jenkins")
-@pytest.mark.skipif(not ha, reason='Test only valid for HA')
 def test_remote_syslog_function(erase_syslogservers):
+    """End-to-end validation of remote syslog using localhost as the "remote" destination.
+
+    Testing on a remote system would be better, e.g. by using the standby node on HA, but this is the best we can do on
+    Jenkins for now.
+
     """
-    End to end validation of remote syslog using temporary
-    reconfiguration of the syslog on the standby node.
-    NOTE: This passes with 'manual' testing, but fails during Jenkins runs.
-          Disabling test until those issues can be resolved.
-    """
-    remote_ip = truenas_server.ha_ips()['standby']
-    test_log = "/var/log/remote_log.txt"
+    remote_port = 611
+    remote_ip = f'127.0.0.1:{remote_port}'
+    test_log = '/var/log/remote_log.txt'
 
-    # Configure for remote syslog on the active node FIRST
-    # because it also updates the standby node with the same
-    payload = {"syslogservers": [{"host": remote_ip, "transport": "TCP"}]}
-    data = call('system.advanced.update', payload)
-    assert data['syslogservers'] == [{"host": remote_ip, "transport": "TCP", "tls_certificate": None}]
-    call('service.control', 'RESTART', 'syslogd', {'silent': False}, job=True)
+    data = call('system.advanced.update', {'syslogservers': [{'host': remote_ip, 'transport': 'TCP'}]})
+    assert data['syslogservers'] == [{'host': remote_ip, 'transport': 'TCP', 'tls_certificate': None}]
+    check_syslog_state()
 
-    # Make sure we don't have old test cruft and start with a zero byte file
-    if not ssh(f'rm -f {test_log}', ip=remote_ip, check=False):
-        ssh(f'rm -f {test_log}', ip=remote_ip)
+    with open('/var/log/syslog-ng/syslog-ng.conf', 'a') as conf_file:
+        # Configure to listen for TCP syslog messages on port 611 and log them to `test_log`.
+        # This temporary configuration is removed by `erase_syslogservers` on test completion.
+        conf_file.write(
+            'source s_test_remote {\n'
+            '  network(\n'
+            '    ip(0.0.0.0)\n'
+           f'    port({remote_port})\n'
+            '    transport(tcp)\n'
+            '  );\n'
+            '};\n\n'
 
-    # Configure standby node as a remote syslog server
-    with standby_syslog_to_remote_syslog() as remote_info:
-        remote_syslog_ip, remote_log = remote_info
-        assert remote_syslog_ip == remote_ip
+            'destination d_test_remote {\n'
+           f'  file({test_log});\n'
+            '};\n\n'
 
-        # Prime the remote (saves a few seconds in the wait)
-        for i in range(5):
-            sleep(0.1)
-            ssh(f"logger '({i}) prime the remote log....'")
+            'log { source(s_test_remote); destination(d_test_remote); };'
+        )
+    assert call('service.control', 'RESTART', 'syslog-ng', job=True)
+    check_syslog_state()
 
-        # Wait for the remote log
-        cntdn = 20
-        while cntdn > 0:
-            ssh(f"logger '({cntdn}) kick the remote log'")
-            sleep(1)
-            if ssh(f"ls {remote_log}", ip=remote_ip, check=False):
-                val = ssh(f"wc -c < {remote_log}", ip=remote_ip)
-                if int(val) > 0:
-                    break
-            cntdn -= 1
-
-        # Write a real message and confirm
-        do_syslog("CANARY", "In a coal mine")
-        assert check_syslog(remote_log, "In a coal mine", remote=True, timeout=20)
+    do_syslog('CANARY', 'In a coal mine')  #savethecanaries
+    assert check_syslog(test_log, 'In a coal mine', timeout=10)
 
 
 @pytest.mark.parametrize('testing', ['TLS transport', 'Mutual TLS'])
