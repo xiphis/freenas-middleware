@@ -182,20 +182,21 @@ def test_remote_syslog_function(erase_syslogservers):
         'source s_test_remote {\n'
         '  network(\n'
         '    ip(0.0.0.0)\n'
-        f'    port({remote_port})\n'
+       f'    port({remote_port})\n'
         '    transport(tcp)\n'
         '  );\n'
         '};\n\n'
 
         'destination d_test_remote {\n'
-        f'  file({test_log});\n'
+       f'  file({test_log});\n'
         '};\n\n'
 
         'log { source(s_test_remote); destination(d_test_remote); };'
     )
     # Appy configuration without regenerating SYSLOG_CONF
     ssh(f'echo {server_config!r} >> {SYSLOG_CONF} && systemctl restart syslog-ng', timeout=10)
-
+    check_syslog_state()
+    sleep(10)
     do_syslog('CANARY', 'In a coal mine')  #savethecanaries
     assert check_syslog(test_log, 'In a coal mine')
 
