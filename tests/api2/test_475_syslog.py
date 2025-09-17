@@ -1,6 +1,7 @@
 from time import sleep
 
 import pytest
+
 from auto_config import ha, password, user
 from middlewared.test.integration.utils import call, ssh
 from middlewared.test.integration.utils.client import truenas_server
@@ -189,9 +190,8 @@ def test_remote_syslog_function(erase_syslogservers):
 
         'log { source(s_test_remote); destination(d_test_remote); };'
     )
-    ssh(f'echo {server_config!r} >> {SYSLOG_CONF}')
-    assert call('service.control', 'RESTART', 'syslog-ng', job=True)
-    check_syslog_state()
+    # Appy configuration without regenerating SYSLOG_CONF
+    ssh(f'echo {server_config!r} >> {SYSLOG_CONF} && systemctl restart syslog-ng', timeout=10)
 
     do_syslog('CANARY', 'In a coal mine')  #savethecanaries
     assert check_syslog(test_log, 'In a coal mine', timeout=10)
