@@ -19,13 +19,13 @@ def do_syslog(ident, message, facility='syslog.LOG_USER', priority='syslog.LOG_I
     This generates a syslog message on the TrueNAS server we're currently testing.
     We don't need to override IP addr or creds because we are not a syslog target.
     """
-    cmd = (
-        'python3 -c "import syslog;'
-       f'syslog.openlog(ident="{ident}", facility={facility});'
-       f'syslog.syslog({priority}, "{message}");'
-        'syslog.closelog()"'
-    )
-    ssh(cmd)
+    script = ';'.join([
+        'import syslog',
+       f'syslog.openlog(ident={ident!r}, facility={facility})',
+       f'syslog.syslog({priority}, {message!r})',
+        'syslog.closelog()',
+    ])
+    ssh(f'python3 -c {script!r}')
 
 
 def check_syslog(log_path, message, target_user=user, target_passwd=password, remote=False, timeout=30):
