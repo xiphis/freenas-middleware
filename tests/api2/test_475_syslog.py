@@ -19,9 +19,12 @@ def do_syslog(ident, message, facility='syslog.LOG_USER', priority='syslog.LOG_I
     This generates a syslog message on the TrueNAS server we're currently testing.
     We don't need to override IP addr or creds because we are not a syslog target.
     """
-    cmd = 'python3 -c "import syslog;'
-    cmd += f'syslog.openlog(ident=\\\"{ident}\\\", facility={facility});'
-    cmd += f'syslog.syslog({priority},\\\"{message}\\\");syslog.closelog()"'
+    cmd = (
+        'python3 -c "import syslog;'
+       f'syslog.openlog(ident="{ident}", facility={facility});'
+       f'syslog.syslog({priority}, "{message}");'
+        'syslog.closelog()"'
+    )
     ssh(cmd)
 
 
@@ -194,7 +197,7 @@ def test_remote_syslog_function(erase_syslogservers):
     ssh(f'echo {server_config!r} >> {SYSLOG_CONF} && systemctl restart syslog-ng', timeout=10)
 
     do_syslog('CANARY', 'In a coal mine')  #savethecanaries
-    assert check_syslog(test_log, 'In a coal mine', timeout=10)
+    assert check_syslog(test_log, 'In a coal mine')
 
 
 @pytest.mark.parametrize('testing', ['TLS transport', 'Mutual TLS'])
