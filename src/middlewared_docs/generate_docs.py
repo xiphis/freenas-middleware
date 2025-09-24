@@ -29,12 +29,14 @@ def _process_single_item(item_data: tuple[str, str, APIDumpMethod | APIDumpEvent
     """
     output_dir, prefix, item, process_type = item_data
     # Apply the appropriate HTML processing based on type
-    if process_type == 'method':
+    if process_type == "method":
         html_process = _api_method_html_process_standalone
     else:
         html_process = _api_event_html_process_standalone
 
-    schemas_html = _generate_item_schemas_html_standalone(output_dir, prefix, item, html_process)
+    schemas_html = _generate_item_schemas_html_standalone(
+        output_dir, prefix, item, html_process
+    )
     rst_content = _generate_item_rst_standalone(item, schemas_html)
 
     return item.name, rst_content
@@ -42,7 +44,11 @@ def _process_single_item(item_data: tuple[str, str, APIDumpMethod | APIDumpEvent
 
 def _api_method_html_process_standalone(soup: BeautifulSoup):
     """Standalone version of _api_method_html_process for multiprocessing."""
-    for h5 in soup.find("div", {"id": "Call_parameters"}).find().find_all("h5", recursive=False):
+    for h5 in (
+        soup.find("div", {"id": "Call_parameters"})
+        .find()
+        .find_all("h5", recursive=False)
+    ):
         if m := re.match("Item at ([0-9]+) must be:", h5.text):
             number = int(m.group(1))
 
@@ -63,7 +69,7 @@ def _generate_item_schemas_html_standalone(
     output_dir: str,
     prefix: str,
     item: APIDumpMethod | APIDumpEvent,
-    process: typing.Callable[[BeautifulSoup], None]
+    process: typing.Callable[[BeautifulSoup], None],
 ) -> str:
     """Standalone version of _generate_item_schemas_html for multiprocessing."""
     json_path = f"{output_dir}/{prefix}_{item.name}.json"
@@ -110,7 +116,9 @@ def _generate_item_schemas_html_standalone(
 
                 new_default_value_value = soup.new_tag("div", **{"class": "value"})
                 new_default_value_value.string = json.dumps(value_decoded, indent=2)
-                new_default_value = soup.new_tag("div", **{"class": "json-default-value"})
+                new_default_value = soup.new_tag(
+                    "div", **{"class": "json-default-value"}
+                )
                 new_default_value.string = "Default:"
                 new_default_value.insert(1, new_default_value_value)
                 default_value.replace_with(new_default_value)
@@ -120,7 +128,9 @@ def _generate_item_schemas_html_standalone(
         os.unlink(json_path)
 
 
-def _generate_item_rst_standalone(item: APIDumpMethod | APIDumpEvent, schemas_html: str) -> str:
+def _generate_item_rst_standalone(
+    item: APIDumpMethod | APIDumpEvent, schemas_html: str
+) -> str:
     """Standalone version of _generate_item_rst for multiprocessing."""
     result = f"{item.name}\n" + "=" * len(item.name) + "\n\n"
 
@@ -131,9 +141,12 @@ def _generate_item_rst_standalone(item: APIDumpMethod | APIDumpEvent, schemas_ht
         result += f"*DEPRECATED: this method is scheduled to be removed in {item.removed_in}.*\n\n"
 
     result += ".. raw:: html\n\n"
-    result += textwrap.indent(
-        "<div id=\"json-schema\">" + schemas_html + "</div><br><br>", " " * 4
-    ) + "\n\n"
+    result += (
+        textwrap.indent(
+            '<div id="json-schema">' + schemas_html + "</div><br><br>", " " * 4
+        )
+        + "\n\n"
+    )
 
     result += "*Required roles:* " + " | ".join(item.roles) + "\n\n"
 
@@ -175,13 +188,18 @@ class DocumentationGenerator:
             self._api_event_html_process,
         )
 
-    def _write_api_index(self, filename: str, title: str, items: list[APIDumpMethod | APIDumpEvent],
-                         html_process: typing.Callable[[BeautifulSoup], None]):
+    def _write_api_index(
+        self,
+        filename: str,
+        title: str,
+        items: list[APIDumpMethod | APIDumpEvent],
+        html_process: typing.Callable[[BeautifulSoup], None],
+    ):
         plugins = sorted({method.name.rsplit(".", 1)[0] for method in items})
 
         index = textwrap.dedent(f"""\
             {title}
-            {'-' * len(title)}
+            {"-" * len(title)}
 
             .. toctree::
 
@@ -189,9 +207,7 @@ class DocumentationGenerator:
 
         for plugin in plugins:
             plugin_items = [
-                item
-                for item in items
-                if item.name.rsplit(".", 1)[0] == plugin
+                item for item in items if item.name.rsplit(".", 1)[0] == plugin
             ]
             if not plugin_items:
                 continue
@@ -199,16 +215,24 @@ class DocumentationGenerator:
             index += f"   {filename}_{plugin}\n"
 
             # Write plugin with parallel processing enabled
-            self._write_plugin(filename, plugin, plugin_items, html_process, use_parallel=True)
+            self._write_plugin(
+                filename, plugin, plugin_items, html_process, use_parallel=True
+            )
 
         with open(f"{self.output_dir}/{filename}.rst", "w") as f:
             f.write(index)
 
-    def _write_plugin(self, prefix: str, plugin: str, items: list[APIDumpMethod | APIDumpEvent],
-                      html_process: typing.Callable[[BeautifulSoup], None], use_parallel: bool = True):
+    def _write_plugin(
+        self,
+        prefix: str,
+        plugin: str,
+        items: list[APIDumpMethod | APIDumpEvent],
+        html_process: typing.Callable[[BeautifulSoup], None],
+        use_parallel: bool = True,
+    ):
         index = textwrap.dedent(f"""\
             {plugin}
-            {'-' * len(plugin)}
+            {"-" * len(plugin)}
 
             .. toctree::
 
@@ -218,26 +242,29 @@ class DocumentationGenerator:
         if use_parallel and len(items) > 1:
             # Determine process type based on html_process function
             if html_process == self._api_method_html_process:
-                process_type = 'method'
+                process_type = "method"
             else:
-                process_type = 'event'
+                process_type = "event"
 
             max_workers = min(len(items), os.cpu_count() or 1)
 
             try:
                 with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                    item_data_list = [(self.output_dir, prefix, item, process_type) for item in items]
+                    item_data_list = [
+                        (self.output_dir, prefix, item, process_type) for item in items
+                    ]
                     futures = {
-                        executor.submit(
-                            _process_single_item, data
-                        ): item for data, item in zip(item_data_list, items)
+                        executor.submit(_process_single_item, data): item
+                        for data, item in zip(item_data_list, items)
                     }
 
                     # Process completed futures in the order they complete
                     for future in as_completed(futures):
                         try:
                             item_name, rst_content = future.result()
-                            with open(f"{self.output_dir}/{prefix}_{item_name}.rst", "w") as f:
+                            with open(
+                                f"{self.output_dir}/{prefix}_{item_name}.rst", "w"
+                            ) as f:
                                 f.write(rst_content)
                         except Exception as e:
                             # If processing fails for an item, fall back to sequential processing
@@ -245,10 +272,15 @@ class DocumentationGenerator:
                             logger.warning(
                                 f"Parallel processing failed for {item.name}: {e}. Falling back to sequential."
                             )
-                            with open(f"{self.output_dir}/{prefix}_{item.name}.rst", "w") as f:
+                            with open(
+                                f"{self.output_dir}/{prefix}_{item.name}.rst", "w"
+                            ) as f:
                                 f.write(
                                     self._generate_item_rst(
-                                        item, self._generate_item_schemas_html(prefix, item, html_process)
+                                        item,
+                                        self._generate_item_schemas_html(
+                                            prefix, item, html_process
+                                        ),
                                     )
                                 )
 
@@ -258,14 +290,17 @@ class DocumentationGenerator:
 
             except Exception as e:
                 # If parallel processing setup fails, fall back to sequential
-                logger.warning(f"Failed to setup parallel processing: {e}. Falling back to sequential processing.")
+                logger.warning(
+                    f"Failed to setup parallel processing: {e}. Falling back to sequential processing."
+                )
                 for item in items:
                     with open(f"{self.output_dir}/{prefix}_{item.name}.rst", "w") as f:
                         f.write(
                             self._generate_item_rst(
-                                item, self._generate_item_schemas_html(
+                                item,
+                                self._generate_item_schemas_html(
                                     prefix, item, html_process
-                                )
+                                ),
                             )
                         )
                     index += f"   {prefix}_{item.name}\n"
@@ -273,15 +308,26 @@ class DocumentationGenerator:
             # Sequential processing for single items or when parallel is disabled
             for item in items:
                 with open(f"{self.output_dir}/{prefix}_{item.name}.rst", "w") as f:
-                    f.write(self._generate_item_rst(item, self._generate_item_schemas_html(prefix, item, html_process)))
+                    f.write(
+                        self._generate_item_rst(
+                            item,
+                            self._generate_item_schemas_html(
+                                prefix, item, html_process
+                            ),
+                        )
+                    )
 
                 index += f"   {prefix}_{item.name}\n"
 
         with open(f"{self.output_dir}/{prefix}_{plugin}.rst", "w") as f:
             f.write(index)
 
-    def _generate_item_schemas_html(self, prefix: str, item: APIDumpMethod | APIDumpEvent,
-                                    process: typing.Callable[[BeautifulSoup], None]) -> str:
+    def _generate_item_schemas_html(
+        self,
+        prefix: str,
+        item: APIDumpMethod | APIDumpEvent,
+        process: typing.Callable[[BeautifulSoup], None],
+    ) -> str:
         json_path = f"{self.output_dir}/{prefix}_{item.name}.json"
         try:
             with open(json_path, "w") as f:
@@ -326,7 +372,9 @@ class DocumentationGenerator:
 
                     new_default_value_value = soup.new_tag("div", **{"class": "value"})
                     new_default_value_value.string = json.dumps(value_decoded, indent=2)
-                    new_default_value = soup.new_tag("div", **{"class": "json-default-value"})
+                    new_default_value = soup.new_tag(
+                        "div", **{"class": "json-default-value"}
+                    )
                     new_default_value.string = "Default:"
                     new_default_value.insert(1, new_default_value_value)
                     default_value.replace_with(new_default_value)
@@ -335,7 +383,9 @@ class DocumentationGenerator:
         finally:
             os.unlink(json_path)
 
-    def _generate_item_rst(self, item: APIDumpMethod | APIDumpEvent, schemas_html: str) -> str:
+    def _generate_item_rst(
+        self, item: APIDumpMethod | APIDumpEvent, schemas_html: str
+    ) -> str:
         result = f"{item.name}\n" + "=" * len(item.name) + "\n\n"
 
         if item.doc:
@@ -345,16 +395,23 @@ class DocumentationGenerator:
             result += f"*DEPRECATED: this method is scheduled to be removed in {item.removed_in}.*\n\n"
 
         result += ".. raw:: html\n\n"
-        result += textwrap.indent(
-            "<div id=\"json-schema\">" + schemas_html + "</div><br><br>", " " * 4
-        ) + "\n\n"
+        result += (
+            textwrap.indent(
+                '<div id="json-schema">' + schemas_html + "</div><br><br>", " " * 4
+            )
+            + "\n\n"
+        )
 
         result += "*Required roles:* " + " | ".join(item.roles) + "\n\n"
 
         return result
 
     def _api_method_html_process(self, soup: BeautifulSoup):
-        for h5 in soup.find("div", {"id": "Call_parameters"}).find().find_all("h5", recursive=False):
+        for h5 in (
+            soup.find("div", {"id": "Call_parameters"})
+            .find()
+            .find_all("h5", recursive=False)
+        ):
             if m := re.match("Item at ([0-9]+) must be:", h5.text):
                 number = int(m.group(1))
 
@@ -399,7 +456,8 @@ def main(output_dir):
         subprocess.run(
             [
                 os.path.join(os.path.dirname(sys.executable), "sphinx-build"),
-                "-M", "html",
+                "-M",
+                "html",
                 rst_dir,
                 build_dir,
             ],
@@ -423,24 +481,29 @@ def main(output_dir):
                     # Version switch
                     version_switch = [
                         (
-                            f'<option value="{api.version}" {"selected" if api.version == version else ""}>' +
-                            f'{api.version_title}' +
-                            '</option>'
+                            f'<option value="{api.version}" {"selected" if api.version == version else ""}>'
+                            + f"{api.version_title}"
+                            + "</option>"
                         )
-                        for api in sorted(apis, key=lambda api: api.version, reverse=True)
+                        for api in sorted(
+                            apis, key=lambda api: api.version, reverse=True
+                        )
                     ]
                     version_switch = (
                         '<form class="form-inline">'
-                        '<select class="form-control" onchange="navigateToVersion(this.value);">' +
-                        ''.join(version_switch) +
-                        '</select>'
-                        '</form>'
+                        '<select class="form-control" onchange="navigateToVersion(this.value);">'
+                        + "".join(version_switch)
+                        + "</select>"
+                        "</form>"
                     )
                     navbar = '<ul class="navbar-nav mr-auto">'
                     contents = contents.replace(navbar, version_switch + navbar)
 
                     # Make sphinx show a summary of the search result (sphinxbootstrap4theme breaks this)
-                    contents = contents.replace('<div class="bodywrapper">', '<div class="bodywrapper" role="main">')
+                    contents = contents.replace(
+                        '<div class="bodywrapper">',
+                        '<div class="bodywrapper" role="main">',
+                    )
 
                     with open(f"{root}/{filename}", "w") as f:
                         f.write(contents)
