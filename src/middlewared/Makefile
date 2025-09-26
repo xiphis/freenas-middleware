@@ -14,12 +14,14 @@ clean:
 	find /usr -type d \( -path "*/dist-packages/middlewared" -o -path "*/site-packages/middlewared" \) 2>/dev/null | xargs -r rm -rf
 
 install:
-	pip install --target /usr/lib/python3/dist-packages --upgrade --no-build-isolation --break-system-packages --root-user-action=ignore .
+	DEB_PYTHON_INSTALL_LAYOUT=deb pip install --prefix /usr --upgrade --force-reinstall --no-build-isolation --break-system-packages --root-user-action=ignore .
 	cp ./debian/middlewared.service /usr/lib/systemd/system/middlewared.service
 
 install_test:
 	bash install-dev-tools
-	pip install --target /usr/lib/python3/dist-packages --upgrade --no-build-isolation --break-system-packages --root-user-action=ignore .
+	@python3 -c "import sys; v=sys.version_info; print(f'Python {v.major}.{v.minor}.{v.micro}'); sys.exit(0 if v[:2] < (3,12) else 1)" && \
+		DEB_PYTHON_INSTALL_LAYOUT=deb pip install --prefix /usr --upgrade --force-reinstall --no-build-isolation --break-system-packages --root-user-action=ignore . || \
+		echo "Skipping pip install - Python version >= 3.12"
 
 migrate:
 	migrate
