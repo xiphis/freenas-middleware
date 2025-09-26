@@ -14,12 +14,12 @@ clean:
 	find /usr -type d \( -path "*/dist-packages/middlewared" -o -path "*/site-packages/middlewared" \) 2>/dev/null | xargs -r rm -rf
 
 install:
-	pip install --no-build-isolation --break-system-packages --root-user-action=ignore .
+	pip install --target /usr/lib/python3/dist-packages --upgrade --no-build-isolation --break-system-packages --root-user-action=ignore .
 	cp ./debian/middlewared.service /usr/lib/systemd/system/middlewared.service
 
 install_test:
 	bash install-dev-tools
-	pip install --no-build-isolation --break-system-packages --root-user-action=ignore .
+	pip install --target /usr/lib/python3/dist-packages --upgrade --no-build-isolation --break-system-packages --root-user-action=ignore .
 
 migrate:
 	migrate
