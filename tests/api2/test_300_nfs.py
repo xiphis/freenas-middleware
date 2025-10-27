@@ -364,14 +364,6 @@ def move_systemdataset(new_pool_name):
     return call('systemdataset.config')
 
 
-def make_list_of_ipaddr(size: int) -> list:
-    """ Return a list of ip addresses """
-    genlist = []
-    for i in range(1, size + 1):
-        genlist.append(f"192.168.1.{i}")
-    return genlist
-
-
 @contextlib.contextmanager
 def system_dataset(new_pool_name):
     '''
@@ -761,9 +753,6 @@ class TestNFSops:
             pp(["::/0"], False, "No entry is required", id="IPv6 - all-networks (::/0)"),
             pp(["::/48"], False, "No entry is required", id="IPv6 - all-networks (::/48)"),
             pp(["192.168.0.0/24", "::/0"], False, "No entry is required", id="IPv6 - overlap with all-networks"),
-            # The following two entries use hostlist to specify the size of the list to create
-            pp(42, True, "", id="Valid - Max allowed entries"),
-            pp(43, False, "should have at most", id="Invalid - Too many entries"),
         ],
     )
     def test_share_networks(
@@ -779,10 +768,6 @@ class TestNFSops:
         assert start_nfs is True
         assert nfs_dataset_and_share['nfsid'] is not None
         nfsid = nfs_dataset_and_share['nfsid']
-
-        # Boundary test on list size
-        if not isinstance(networklist, list):
-            networklist = make_list_of_ipaddr(networklist)
 
         with nfs_share_config(nfsid):
             if ExpectedToPass:
@@ -835,9 +820,6 @@ class TestNFSops:
             pp(["bad host"], False, "Cannot contain spaces", id="Invalid - name with spaces"),
             pp(["2001:0db8:85a3:0000:0000:8a2e:0370:7334"], True, "", id="Valid - IPv6 address"),
             pp(["::"], False, "No entry is required", id="Invalid - IPv6 everybody as ::"),
-            # The following two entries use hostlist to specify size of the list to create
-            pp(42, True, "", id="Valid - Max allowed entries"),
-            pp(43, False, "should have at most", id="Invalid - Too many entries"),
         ],
     )
     def test_share_hosts(
@@ -863,10 +845,6 @@ class TestNFSops:
         assert start_nfs is True
         assert nfs_dataset_and_share['nfsid'] is not None
         nfsid = nfs_dataset_and_share['nfsid']
-
-        # Boundary test on list size
-        if not isinstance(hostlist, list):
-            hostlist = make_list_of_ipaddr(hostlist)
 
         with nfs_share_config(nfsid):
             if ExpectedToPass:
@@ -1696,7 +1674,7 @@ class TestNFSops:
                         [call('sharing.nfs.delete', id) for id in endIdList if id not in startIdList]
 
         @pytest.mark.parametrize(
-            "dirname,isHost,HostOrNet,ExpectedToPass, ErrFormat", [
+            "dirname,isHost,HostOrNet,ExpectToPass, ErrFormat", [
                 pp("everybody_1", True, ["*"], True, None, id="NAS-120957: host - everybody"),
                 pp("everybody_2", True, ["*"], True, None, id="NAS-120957: host - non-related paths"),
                 pp("everybody_2", False, ["192.168.1.0/22"], True, None, id="NAS-129577: network, everybody, same path"),
@@ -1725,7 +1703,7 @@ class TestNFSops:
                 pp("dir_1/symlink2subdir3", True, ["192.168.0.0"], False, 3, id="Block exporting symlinks"),
             ],
         )
-        def test_subtree_share(self, start_nfs, dataset_and_dirs, dirname, isHost, HostOrNet, ExpectedToPass, ErrFormat):
+        def test_subtree_share(self, start_nfs, dataset_and_dirs, dirname, isHost, HostOrNet, ExpectToPass, ErrFormat):
             """
             Sharing subtrees to the same host can cause problems for
             NFSv3.  This check makes sure a share creation follows
@@ -1755,7 +1733,7 @@ class TestNFSops:
             else:
                 payload = {"path": dirpath, "networks": HostOrNet}
 
-            if ExpectedToPass:
+            if ExpectToPass:
                 call("sharing.nfs.create", payload)
             else:
                 with pytest.raises(ValidationErrors) as ve:
@@ -1992,6 +1970,82 @@ class TestNFSops:
                 call('service.control', 'RESTART', 'nfs', job=True)
                 confirm_clean()
 
+    @pytest.mark.parametrize('entry_type,num,expect_alert', [
+        pp('both', 0, False, id="confirm no alerts"),
+        pp('hosts', 100, True, id="excessive hosts alert: 100"),
+        pp('networks', 100, True, id="excessive networks alert: 100"),
+        pp('hosts', 99, False, id="excessive hosts alert clear: 99"),
+        pp('networks', 99, False, id="excessive networks alert clear: 0"),
+    ])
+    def test_share_host_and_network_alerts(self, start_nfs, nfs_dataset_and_share, entry_type, num, expect_alert):
+        """Test alert generation wtih excessive number of host or network entries. Current threshold: 100"""
+        assert start_nfs is True
+        share_id = nfs_dataset_and_share['nfsid']
+        ds = nfs_dataset_and_share['ds']
+        nfs_share_alerts = {'hosts': "NFSHostListExcessive", 'networks': "NFSNetworkListExcessive"}
+
+        match entry_type:
+            case 'both':  # Both hosts and networks are empty should result in no alerts
+                alerts = call('alert.list')
+                current_alerts = [entry for entry in alerts if entry['key'] in list(nfs_share_alerts.values())]
+                assert len(current_alerts) == 0, f"Unexpectedly found NFS share alert.\n{current_alerts}"
+            case 'hosts':
+                allowed_client_list = [] if num == 0 else [f"192.168.50.{i}" for i in range(1, num + 1)]
+            case 'networks':
+                allowed_client_list = [] if num == 0 else [f"192.168.40.{i}/32" for i in range(1, num + 1)]
+
+        if entry_type in ['hosts', 'networks']:
+            alert_name = nfs_share_alerts[entry_type]
+            alerts = call('alert.list')
+
+            # Confirm we're starting in an expected state
+            this_alert = [entry for entry in alerts if entry['klass'] == alert_name]
+            if expect_alert:
+                # Should be starting clean
+                assert len(this_alert) == 0, f"Unexpectedly found pre-existing alert '{alert_name}'.\n{alerts}"
+            else:
+                # Should have an alert to clear
+                assert len(this_alert) > 0, f"Unexpectedly did not find an alert to clear '{alert_name}'.\n{alerts}"
+
+            # Make the share change and get the current list of alerts
+            call('sharing.nfs.update', share_id, {entry_type: allowed_client_list})
+            alerts = call('alert.list')
+
+            # Confirm we get the expected result
+            if expect_alert:
+                this_alert = [entry for entry in alerts if entry['klass'] == alert_name]
+                assert len(this_alert) == 1, f"Did not find alert for '{alert_name}'.\n{alerts}"
+            else:
+                # The alert should be cleared
+                this_alert = [entry for entry in alerts if entry['key'] == f"/mnt/{ds}"]
+                assert len(this_alert) == 0, f"Unexpectedly found alert for key '/mnt/{ds}'.\n{alerts}"
+
+    def test_share_alert_on_share_delete(self, start_nfs):
+        """Share alerts should be deleted when the share is deleted. Current threshold: 100"""
+        assert start_nfs is True
+        alerts = call('alert.list')
+        current_alerts = [entry for entry in alerts if entry['klass'] == "NFSHostListExcessive"]
+        assert len(current_alerts) == 0, f"Unexpectedly found NFS share alert.\n{current_alerts}"
+
+        with nfs_dataset('nfs') as ds:
+            with nfs_share(NFS_PATH, {
+            }) as nfsid:
+                alerts = call('alert.list')
+                current_alerts = [entry for entry in alerts if entry['key'] == f"/mnt/{ds}"]
+                assert len(current_alerts) == 0, f"Unexpectedly found NFS share alert for key '/mnt/{ds}'\n{alerts}"
+
+                allowed_client_list = [f"192.168.50.{i}" for i in range(1, 101)]
+                call('sharing.nfs.update', nfsid, {'hosts': allowed_client_list})
+                alerts = call('alert.list')
+
+                this_alert = [entry for entry in alerts if entry['klass'] == "NFSHostListExcessive"]
+                assert len(this_alert) == 1, f"Did not find alert for 'NFSHostListExcessive'.\n{alerts}"
+
+        # Share should be gone.  Check alerts
+        alerts = call('alert.list')
+        this_alert = [entry for entry in alerts if entry['klass'] == "NFSHostListExcessive"]
+        assert len(this_alert) == 0, f"Unexpectedly found alert for 'NFSHostListExcessive'.\n{alerts}"
+
 
 def test_pool_delete_with_attached_share():
     '''
@@ -2054,44 +2108,3 @@ def test_missing_or_empty_exports(exports):
 
     # Confirm stopped
     assert get_nfs_service_state() == "STOPPED"
-
-
-@pytest.mark.parametrize('expect_NFS_start', [False, True])
-def test_random_files_in_exportsd(expect_NFS_start):
-    '''
-    Any files in /etc/exports.d are potentially dangerous, especially zfs.exports.
-    We implemented protections against rogue exports files.
-    - We block starting NFS if there are any files in /etc/exports.d
-    - We generate an alert when we detect this condition
-    - We clear the alert when /etc/exports.d is empty
-    '''
-    fail_check = {False: 'ConditionDirectoryNotEmpty=!/etc/exports.d', True: None}
-
-    try:
-        # Setup the test
-        set_immutable_state('/etc/exports.d', want_immutable=False)  # Disable immutable
-
-        # Do the 'failing' case first to end with a clean condition
-        if not expect_NFS_start:
-            ssh("echo 'bogus data' > /etc/exports.d/persistent.file")
-            ssh("chattr +i /etc/exports.d/persistent.file")
-        else:
-            # Restore /etc/exports.d directory to a clean state
-            ssh("chattr -i /etc/exports.d/persistent.file")
-            ssh("rm -rf /etc/exports.d/*")
-
-        set_immutable_state('/etc/exports.d', want_immutable=True)  # Enable immutable
-
-        set_nfs_service_state('start', expect_NFS_start, fail_check[expect_NFS_start])
-
-    finally:
-        # In all cases we want to end with NFS stopped
-        set_nfs_service_state('stop')
-
-        # If NFS start is blocked, then an alert should have been raised
-        alerts = call('alert.list')
-        if not expect_NFS_start:
-            # Find alert
-            assert any(alert["klass"] == "NFSblockedByExportsDir" for alert in alerts), alerts
-        else:  # Alert should have been cleared
-            assert not any(alert["klass"] == "NFSblockedByExportsDir" for alert in alerts), alerts

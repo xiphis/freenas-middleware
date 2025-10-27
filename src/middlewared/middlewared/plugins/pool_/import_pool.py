@@ -47,7 +47,7 @@ class PoolService(Service):
                 # we'll need iterate all children no matter what.
                 await self.middleware.call(
                     'pool.dataset.update_impl',
-                    UpdateImplArgs(name=i, zprops={'mountpoint': f'/mnt/{pool_name}'})
+                    UpdateImplArgs(name=i['name'], zprops={'mountpoint': f'/mnt/{pool_name}'})
                 )
                 to_inherit.append(pool_name)
                 break
@@ -56,28 +56,28 @@ class PoolService(Service):
                 # cause PVC's to not mount because "mountpoint=legacy" is expected.
                 continue
 
-            if (
-                i['name'] == f'{pool_name}/.truenas_containers'
-                and i['name'] == container_ds
-                and container_mnt != mntpnt
-            ):
+            if i['name'] == container_ds and container_mnt != mntpnt.removeprefix('/mnt'):
+                # TODO: fix the "removeprefix('/mnt')" logic. /mnt is altroot
+                # set at the zpool but the container_dataset_mountpoint function
+                # returns the mountpoint without it. Makes using it confusing
+                # and non-obvious.
                 # This dataset gets a custom mountpoint so user cannot
                 # unintentionally share it via SMB, NFS, etc.
                 await self.middleware.call(
                     'pool.dataset.update_impl',
-                    UpdateImplArgs(name=i, zprops={'mountpoint': container_mnt})
+                    UpdateImplArgs(name=i['name'], zprops={'mountpoint': container_mnt})
                 )
             elif i['name'] == f'{pool_name}/ix-apps' and mntpnt != f'/{IX_APPS_DIR_NAME}':
                 await self.middleware.call(
                     'pool.dataset.update_impl',
-                    UpdateImplArgs(name=i, zprops={'mountpoint': f'/{IX_APPS_DIR_NAME}'})
+                    UpdateImplArgs(name=i['name'], zprops={'mountpoint': f'/{IX_APPS_DIR_NAME}'})
                 )
             elif mntpnt != f'/mnt/{pool_name}/{i["name"]}':
                 to_inherit.append(i["name"])
 
         if to_inherit:
             # NOTE: we use zfs.resource.query which will hide internal
-            # paths. This is important so don't chagne it unless you
+            # paths. This is important so don't change it unless you
             # understand the implications fully.
             for i in await self.middleware.call(
                 'zfs.resource.query',

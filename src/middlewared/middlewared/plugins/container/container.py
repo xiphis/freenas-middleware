@@ -1,5 +1,6 @@
 import errno
 import itertools
+import os
 import re
 import uuid
 
@@ -20,6 +21,8 @@ from middlewared.service import CRUDService, job, private, ValidationErrors
 import middlewared.sqlalchemy as sa
 from middlewared.utils import BOOT_POOL_NAME_VALID
 from middlewared.utils.zfs import query_imported_fast_impl
+
+from .utils import container_dataset
 
 RE_NAME = re.compile(r'^[a-zA-Z_0-9\-]+$')
 
@@ -90,7 +93,14 @@ class ContainerService(CRUDService):
 
     @private
     async def extend(self, container, context):
-        container['status'] = get_pylibvirt_domain_state(context['states'], container)
+        container.update({
+            'status': get_pylibvirt_domain_state(context['states'], container),
+            'devices': await self.middleware.call(
+                'container.device.query',
+                [('container', '=', container['id'])],
+                {'force_sql_filters': True},
+            )
+        })
 
         self.extend_container(container)
 
@@ -191,7 +201,7 @@ class ContainerService(CRUDService):
             verrors.check()
 
         await self.middleware.call('container.ensure_datasets', pool)
-        data['dataset'] = f'{pool}/.truenas_containers/containers/{data["name"]}'
+        data['dataset'] = os.path.join(container_dataset(pool), f'containers/{data["name"]}')
 
         # Populate dataset
         if pool == image_snapshot.split('@')[0].split('/')[0]:  # noqa
