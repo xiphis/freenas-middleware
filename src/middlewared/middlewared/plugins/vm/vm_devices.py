@@ -1,4 +1,6 @@
 import errno
+import json
+import math
 import os
 import re
 import subprocess
@@ -6,27 +8,29 @@ import subprocess
 import middlewared.sqlalchemy as sa
 from middlewared.api import api_method
 from middlewared.api.current import (
+    VMDeviceBindChoicesArgs,
+    VMDeviceBindChoicesResult,
     VMDeviceConvertArgs,
     VMDeviceConvertResult,
     VMDeviceCreateArgs,
     VMDeviceCreateResult,
-    VMDeviceEntry,
-    VMDeviceUpdateArgs,
-    VMDeviceUpdateResult,
     VMDeviceDeleteArgs,
     VMDeviceDeleteResult,
     VMDeviceDiskChoicesArgs,
     VMDeviceDiskChoicesResult,
+    VMDeviceEntry,
     VMDeviceIotypeChoicesArgs,
     VMDeviceIotypeChoicesResult,
     VMDeviceNicAttachChoicesArgs,
     VMDeviceNicAttachChoicesResult,
-    VMDeviceBindChoicesArgs,
-    VMDeviceBindChoicesResult,
+    VMDeviceUpdateArgs,
+    VMDeviceUpdateResult,
+    VMDeviceVirtualSizeArgs,
+    VMDeviceVirtualSizeResult,
 )
 from middlewared.plugins.zfs.utils import has_internal_path
 from middlewared.service import CallError, CRUDService, job, private
-from middlewared.service_exception import ValidationError
+from middlewared.service_exception import InstanceNotFound, ValidationError
 from middlewared.utils.libvirt.device_factory import DeviceFactory
 from middlewared.utils.libvirt.mixin import DeviceMixin
 
@@ -103,6 +107,26 @@ class VMDeviceService(CRUDService, DeviceMixin):
             raise CallError(f'Failed to execute qemu-img convert: {e}')
 
     @private
+    def virtual_size_impl(self, schema: str, file_path: str) -> int:
+        if not os.path.isabs(file_path):
+            raise ValidationError(schema, f'{file_path!r} must be an absolute path.', errno.EINVAL)
+
+        try:
+            rv = subprocess.run(
+                ['qemu-img', 'info', '--output=json', file_path],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return json.loads(rv.stdout)['virtual-size']
+        except subprocess.CalledProcessError as e:
+            raise ValidationError(schema, f'Failed to run command to determine virtual size: {e}')
+        except KeyError:
+            raise ValidationError(schema, f'Unable to determine virtual size of {file_path!r}: {rv.stdout}')
+        except json.JSONDecodeError as e:
+            raise ValidationError(schema, f'Failed to decode json output: {e}')
+
+    @private
     def validate_convert_disk_image(self, dip, schema, converting_from_image_to_zvol=False):
         if not dip.startswith("/mnt/") or os.path.dirname(dip) == "/mnt":
             raise ValidationError(schema, f'{dip!r} is an invalid location', errno.EINVAL)
@@ -175,7 +199,41 @@ class VMDeviceService(CRUDService, DeviceMixin):
         elif not os.path.exists(ntp):
             raise ValidationError(schema, f'{ntp!r} does not exist', errno.ENOENT)
 
-        return zv, ntp
+        for i in self.middleware.call_sync('vm.device.query', [['attributes.dtype', '=', 'DISK']]):
+            vmzv = i['attributes'].get('path')
+            if vmzv and vmzv == ntp:
+                try:
+                    vm = self.middleware.call_sync('vm.get_instance', i['vm'])
+                    if vm['status']['state'] == 'RUNNING':
+                        raise ValidationError(
+                            schema,
+                            f'{vmzv!r} is part of running VM. {vm["name"]!r} must be stopped first',
+                            errno.EBUSY
+                        )
+                except InstanceNotFound:
+                    pass
+
+        return zv[0], ntp
+
+    @api_method(
+        VMDeviceVirtualSizeArgs,
+        VMDeviceVirtualSizeResult,
+        roles=['VM_DEVICE_READ']
+    )
+    def virtual_size(self, data):
+        """
+        Get the virtual size of a disk image using qemu-img info.
+
+        Args:
+            file_path: Absolute path to the disk image file
+
+        Returns:
+            Virtual size in bytes (int)
+
+        Raise:
+            ValidationError if any failure occurs
+        """
+        return self.virtual_size_impl('vm.device.virtual_size', data['path'])
 
     @api_method(
         VMDeviceConvertArgs,
@@ -217,11 +275,18 @@ class VMDeviceService(CRUDService, DeviceMixin):
 
         st = self.validate_convert_disk_image(source_image, schema, converting_from_image_to_zvol)
         zv, abs_zvolpath = self.validate_convert_zvol(zvol, schema)
-
         cmd_args = ['qemu-img', 'convert', '-p']
         if converting_from_image_to_zvol:
-            if st and st['size'] > zv[0]['properties']['volsize']['value']:
-                raise ValidationError(schema, f'{zvol!r} is too small', errno.ENOSPC)
+            virtual_size = self.virtual_size_impl(schema, st['realpath'])
+            if virtual_size > zv['properties']['volsize']['value']:
+                # always convert to next whole GB.
+                vshgb = max(1, math.ceil(virtual_size / (1024 ** 3)))
+                zvhgb = max(1, math.ceil(zv['properties']['volsize']['value'] / (1024 ** 3)))
+                raise ValidationError(
+                    schema,
+                    f"{zv['name']} too small (~{zvhgb}G). Minimum size must be {vshgb}G",
+                    errno.ENOSPC
+                )
             cmd_args.extend(['-O', 'raw', source_image, abs_zvolpath])
         else:
             dl = data['destination'].lower()

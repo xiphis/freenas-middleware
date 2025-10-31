@@ -21,6 +21,7 @@ __all__ = [
     'VMDeviceUsbPassthroughChoicesArgs', 'VMDeviceUsbPassthroughChoicesResult',
     'VMDeviceUsbControllerChoicesArgs', 'VMDeviceUsbControllerChoicesResult',
     'VMDeviceConvertArgs', 'VMDeviceConvertResult',
+    'VMDeviceVirtualSizeArgs', 'VMDeviceVirtualSizeResult'
 ]
 
 
@@ -419,9 +420,8 @@ class VMDeviceUsbControllerChoicesArgs(BaseModel):
     pass
 
 
-@single_argument_result
 class VMDeviceUsbControllerChoicesResult(BaseModel):
-    model_config = ConfigDict(extra='allow')
+    result: dict[str, str]
     """Available USB controller types for virtual machines."""
 
 
@@ -436,3 +436,14 @@ class VMDeviceConvertArgs(BaseModel):
 class VMDeviceConvertResult(BaseModel):
     result: bool
     """Whether the conversion operation was successful."""
+
+
+@single_argument_args('vm_virtual_size')
+class VMDeviceVirtualSizeArgs(BaseModel):
+    path: str
+    """Absolute path to the disk image."""
+
+
+class VMDeviceVirtualSizeResult(BaseModel):
+    result: int
+    """The virtual size of the disk image in bytes."""
