@@ -18,7 +18,6 @@ from .job import Job, JobsQueue, State
 from .logger import Logger, setup_audit_logging, setup_logging
 from .pipe import Pipe
 from .pylibvirt import create_pylibvirt_domains_manager
-from .restful import RESTfulAPI
 from .role import ROLES, RoleManager
 import middlewared.service
 from .service_exception import CallError, ErrnoMixin
@@ -905,11 +904,14 @@ class Middleware(LoadPluginsMixin, ServiceCallMixin):
             # FIXME: Get rid of `create`/`do_create` duality
             methodobj = do_method
 
-        if new_style_returns_model is None and hasattr(methodobj, "new_style_returns"):
-            # anything decorated with @api_method gets this attribute
-            return serialize_result(methodobj.new_style_returns, result, expose_secrets)
+        if new_style_returns_model is None:
+            if hasattr(methodobj, "new_style_returns"):
+                new_style_returns_model = methodobj.new_style_returns
 
-        return result
+        if new_style_returns_model:
+            return serialize_result(new_style_returns_model, result, expose_secrets)
+        else:
+            return result
 
     async def authorize_method_call(self, app, method_name, methodobj, params):
         if hasattr(methodobj, '_no_auth_required'):
@@ -1517,8 +1519,6 @@ class Middleware(LoadPluginsMixin, ServiceCallMixin):
         shellapp = ShellApplication(self)
         app.router.add_route('*', '/_shell{path_info:.*}', shellapp.ws_handler)
 
-        restful_api = RESTfulAPI(self, app)
-        await restful_api.register_resources()
         self.create_task(self.jobs.run())
 
         # Start up middleware worker process pool
