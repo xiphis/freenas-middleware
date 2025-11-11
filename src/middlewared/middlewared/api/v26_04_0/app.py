@@ -5,11 +5,12 @@ from pydantic import ConfigDict, Field, RootModel, Secret
 from middlewared.api.base import BaseModel, LongString, NonEmptyString, single_argument_args, single_argument_result
 
 from .catalog import CatalogAppInfo
+from .common import QueryArgs, QueryOptions
 
 
 __all__ = [
     'AppCategoriesArgs', 'AppCategoriesResult', 'AppSimilarArgs', 'AppSimilarResult', 'AppAvailableItem',
-    'AppEntry', 'AppCreateArgs', 'AppCreateResult', 'AppUpdateArgs', 'AppUpdateResult', 'AppDeleteArgs',
+    'AppEntry', 'AppQueryArgs', 'AppCreateArgs', 'AppCreateResult', 'AppUpdateArgs', 'AppUpdateResult', 'AppDeleteArgs',
     'AppDeleteResult', 'AppConfigArgs', 'AppConfigResult', 'AppConvertToCustomArgs', 'AppConvertToCustomResult',
     'AppStopArgs', 'AppStopResult', 'AppStartArgs', 'AppStartResult', 'AppRedeployArgs', 'AppRedeployResult',
     'AppOutdatedDockerImagesArgs', 'AppOutdatedDockerImagesResult', 'AppPullImagesArgs', 'AppPullImagesResult',
@@ -26,6 +27,26 @@ __all__ = [
 
 
 CONTAINER_STATES: TypeAlias = Literal['crashed', 'created', 'exited', 'running', 'starting']
+
+
+class AppQueryOptionsExtra(BaseModel):
+    host_ip: str | None = None
+    """Override portal IP address if it is a wildcard."""
+    include_app_schema: bool = False
+    """Include app schema in the response."""
+    retrieve_config: bool = False
+    """Retrieve app configuration used to install/manage app."""
+    include_external: bool = False
+    """Include external Docker containers not managed by TrueNAS."""
+
+
+class AppQueryOptions(QueryOptions):
+    extra: AppQueryOptionsExtra = AppQueryOptionsExtra()
+
+
+class AppQueryArgs(QueryArgs):
+    options: AppQueryOptions = AppQueryOptions()
+    """Query options including pagination, ordering, and app-specific parameters."""
 
 
 class HostPorts(BaseModel):

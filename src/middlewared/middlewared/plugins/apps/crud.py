@@ -5,12 +5,13 @@ import shutil
 from catalog_reader.custom_app import get_version_details
 
 from middlewared.api import api_method
+from middlewared.api.base import query_result
 from middlewared.api.current import (
-    AppEntry, AppCreateArgs, AppCreateResult, AppUpdateArgs, AppUpdateResult, AppDeleteArgs, AppDeleteResult,
-    AppConfigArgs, AppConfigResult, AppConvertToCustomArgs, AppConvertToCustomResult,
+    AppEntry, AppQueryArgs, AppCreateArgs, AppCreateResult, AppUpdateArgs, AppUpdateResult, AppDeleteArgs,
+    AppDeleteResult, AppConfigArgs, AppConfigResult, AppConvertToCustomArgs, AppConvertToCustomResult,
 )
 from middlewared.service import (
-    CallError, CRUDService, filterable_api_method, job, private, ValidationErrors
+    CallError, CRUDService, job, private, ValidationErrors
 )
 from middlewared.utils.filter_list import filter_list
 from middlewared.plugins.zfs.destroy_impl import DestroyArgs
@@ -34,7 +35,10 @@ class AppService(CRUDService):
         role_prefix = 'APPS'
         entry = AppEntry
 
-    @filterable_api_method(item=AppEntry, pass_app=True, pass_app_rest=True)
+    @api_method(
+        AppQueryArgs, query_result(AppEntry, 'AppQueryResult'),
+        pass_app=True, pass_app_rest=True, roles=['APPS_READ']
+    )
     def query(self, app, filters, options):
         """
         Query all apps with `query-filters` and `query-options`.
