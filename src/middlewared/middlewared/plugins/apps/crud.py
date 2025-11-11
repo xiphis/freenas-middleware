@@ -5,10 +5,9 @@ import shutil
 from catalog_reader.custom_app import get_version_details
 
 from middlewared.api import api_method
-from middlewared.api.base import query_result
 from middlewared.api.current import (
-    AppEntry, AppQueryArgs, AppCreateArgs, AppCreateResult, AppUpdateArgs, AppUpdateResult, AppDeleteArgs,
-    AppDeleteResult, AppConfigArgs, AppConfigResult, AppConvertToCustomArgs, AppConvertToCustomResult,
+    AppEntry, AppQueryArgs, AppQueryResult, AppCreateArgs, AppCreateResult, AppUpdateArgs, AppUpdateResult,
+    AppDeleteArgs, AppDeleteResult, AppConfigArgs, AppConfigResult, AppConvertToCustomArgs, AppConvertToCustomResult,
 )
 from middlewared.service import (
     CallError, CRUDService, job, private, ValidationErrors
@@ -36,7 +35,7 @@ class AppService(CRUDService):
         entry = AppEntry
 
     @api_method(
-        AppQueryArgs, query_result(AppEntry, 'AppQueryResult'),
+        AppQueryArgs, AppQueryResult,
         pass_app=True, pass_app_rest=True, roles=['APPS_READ']
     )
     def query(self, app, filters, options):

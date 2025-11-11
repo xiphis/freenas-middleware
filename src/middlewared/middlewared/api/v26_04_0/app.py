@@ -2,7 +2,9 @@ from typing import Literal, TypeAlias
 
 from pydantic import ConfigDict, Field, RootModel, Secret
 
-from middlewared.api.base import BaseModel, LongString, NonEmptyString, single_argument_args, single_argument_result
+from middlewared.api.base import (
+    BaseModel, LongString, NonEmptyString, query_result, single_argument_args, single_argument_result
+)
 
 from .catalog import CatalogAppInfo
 from .common import QueryArgs, QueryOptions
@@ -10,7 +12,7 @@ from .common import QueryArgs, QueryOptions
 
 __all__ = [
     'AppCategoriesArgs', 'AppCategoriesResult', 'AppSimilarArgs', 'AppSimilarResult', 'AppAvailableItem',
-    'AppEntry', 'AppQueryArgs', 'AppCreateArgs', 'AppCreateResult', 'AppUpdateArgs', 'AppUpdateResult', 'AppDeleteArgs',
+    'AppEntry', 'AppQueryArgs', 'AppQueryResult', 'AppCreateArgs', 'AppCreateResult', 'AppUpdateArgs', 'AppUpdateResult', 'AppDeleteArgs',
     'AppDeleteResult', 'AppConfigArgs', 'AppConfigResult', 'AppConvertToCustomArgs', 'AppConvertToCustomResult',
     'AppStopArgs', 'AppStopResult', 'AppStartArgs', 'AppStartResult', 'AppRedeployArgs', 'AppRedeployResult',
     'AppOutdatedDockerImagesArgs', 'AppOutdatedDockerImagesResult', 'AppPullImagesArgs', 'AppPullImagesResult',
@@ -154,6 +156,9 @@ class AppEntry(BaseModel):
     """Detailed version information including changelog and upgrade notes. `null` if not available."""
     config: dict | None = None
     """Current configuration values for the application. `null` if configuration is not requested."""
+
+
+AppQueryResult = query_result(AppEntry, name='AppQueryResult')
 
 
 @single_argument_args('app_create')
