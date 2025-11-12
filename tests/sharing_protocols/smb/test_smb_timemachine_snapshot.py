@@ -60,7 +60,7 @@ HISTORY_PATH = os.path.join(TM, HISTORY_FILE)
 def smb_setup(request):
     with dataset('smb-tm', data={'share_type': 'SMB'}) as ds:
         ssh(f'mkdir -p {os.path.join("/mnt", ds, TM)}')
-        ssh(f'echo -n {INIT_HISTORY} > {os.path.join("/mnt", ds, TM, HISTORY_FILE)}')
+        ssh(f"echo -n '{INIT_HISTORY}' > {os.path.join('/mnt', ds, TM, HISTORY_FILE)}")
         with user({
             'username': SHAREUSER,
             'full_name': SHAREUSER,
