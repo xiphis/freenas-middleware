@@ -55,9 +55,17 @@ TM = 'ixmini.sparsebundle'
 HISTORY_FILE = 'com.apple.TimeMachine.SnapshotHistory.plist'
 HISTORY_PATH = os.path.join(TM, HISTORY_FILE)
 
+@pytest.fixture(scope='module')
+def aapl_extensions():
+    call('smb.update', {'aapl_extensions': True})
+    try:
+        yield
+    finally:
+        call('smb.update', {'aapl_extensions': False})
+
 
 @pytest.fixture(scope='module')
-def smb_setup(request):
+def smb_setup(aapl_extensions):
     with dataset('smb-tm', data={'share_type': 'SMB'}) as ds:
         ssh(f'mkdir -p {os.path.join("/mnt", ds, TM)}')
         ssh(f"echo -n '{INIT_HISTORY}' > {os.path.join('/mnt', ds, TM, HISTORY_FILE)}")
