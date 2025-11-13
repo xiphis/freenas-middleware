@@ -75,7 +75,7 @@ def smb_setup(aapl_extensions):
             'group_create': True,
             'password': PASSWD
         }):
-            ssh(f'chown {SHARE_USER} {os.path.join("/mnt", ds, TM, HISTORY_FILE)}')
+            ssh(f'chown {SHAREUSER} {os.path.join("/mnt", ds, TM, HISTORY_FILE)}')
             with smb_share(os.path.join('/mnt', ds), SMB_NAME, {
                 'purpose': 'TIMEMACHINE_SHARE',
                 'options': {'auto_snapshot': True}
