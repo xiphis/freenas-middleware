@@ -848,16 +848,16 @@ class AuditModel(Model):
 async def test__json_path_filters(filters, expected_ids):
     async with datastore_test() as ds:
         ds.execute(
-            "INSERT INTO audit_middleware_0_1 VALUES (1, 'admin', "
-            "'{\"method\": \"user.delete\", \"params\": [38], \"nested\": {\"key\": \"value1\"}}')"
+            "INSERT INTO audit_middleware_0_1 VALUES (1, "
+            "'{\"method\": \"user.delete\", \"params\": [38], \"nested\": {\"key\": \"value1\"}}', 'admin')"
         )
         ds.execute(
-            "INSERT INTO audit_middleware_0_1 VALUES (2, 'admin', "
-            "'{\"method\": \"user.create\", \"params\": [39], \"nested\": {\"key\": \"value2\"}}')"
+            "INSERT INTO audit_middleware_0_1 VALUES (2, "
+            "'{\"method\": \"user.create\", \"params\": [39], \"nested\": {\"key\": \"value2\"}}', 'admin')"
         )
         ds.execute(
-            "INSERT INTO audit_middleware_0_1 VALUES (3, 'root', "
-            "'{\"method\": \"user.delete\", \"params\": [40, 41], \"nested\": {\"key\": \"value3\"}}')"
+            "INSERT INTO audit_middleware_0_1 VALUES (3, "
+            "'{\"method\": \"user.delete\", \"params\": [40, 41], \"nested\": {\"key\": \"value3\"}}', 'root')"
         )
 
         result = await ds.query("audit.middleware_0_1", filters)
