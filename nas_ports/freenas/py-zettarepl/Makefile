@@ -3,7 +3,7 @@
 PORTNAME=	zettarepl
 PORTVERSION=	0.1
 PORTREVISION=	45
-CATEGORIES=	sysutils python
+CATEGORIES=	freenas sysutils python
 PKGNAMEPREFIX=	${PYTHON_PKGNAMEPREFIX}
 
 MAINTAINER=	vladimirv@ixsystems.com
