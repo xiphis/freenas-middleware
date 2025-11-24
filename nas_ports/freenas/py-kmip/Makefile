@@ -2,7 +2,7 @@
 
 PORTNAME=	kmip
 PORTVERSION=	0.10.0
-CATEGORIES=	devel python
+CATEGORIES=	freenas devel python
 PKGNAMEPREFIX=	${PYTHON_PKGNAMEPREFIX}
 
 MAINTAINER=	waqar@ixsystems.com
