@@ -4,6 +4,7 @@
 PORTNAME=      inadyn-troglobit
 DISTVERSION=   2.9.1
 CATEGORIES=    freenas dns
+VALID_CATEGORIES+= freenas
 
 MAINTAINER=	themylogin@gmail.com
 COMMENT=	Dynamic DNS client with SSL/TLS support
