@@ -4,7 +4,7 @@
 PORTNAME=	areca-cli
 DISTVERSION=	${CLI_VER}.${CLI_REV}
 PORTEPOCH=	1
-CATEGORIES=	sysutils
+CATEGORIES=	freenas sysutils
 MASTER_SITES=	http://www.areca.us/support/s_freebsd/cli/ \
 		LOCAL/ehaupt
 PKGNAMESUFFIX=	-${ARCH}

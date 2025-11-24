@@ -3,7 +3,7 @@
 PORTNAME=	scanlnk
 PORTVERSION=	0.1
 PORTREVISION=	0
-CATEGORIES=	sysutils
+CATEGORIES=	freenas sysutils
 
 MAINTAINER=	awalker@ixsystems.com
 COMMENT=	Quick check for symlinks pointing to device underlying "/"

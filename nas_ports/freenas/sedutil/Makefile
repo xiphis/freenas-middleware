@@ -4,7 +4,7 @@
 PORTNAME=	sedutil
 PORTVERSION=	1.15.1
 PORTREVISION=	14
-CATEGORIES=	sysutils
+CATEGORIES=	freenas sysutils
 
 MAINTAINER=	mav@FreeBSD.org
 COMMENT=	Self Encrypting Drive Utility
