@@ -12,7 +12,7 @@ MAINTAINER=	dev@ixsystems.com
 COMMENT=	Python wrappers for various BSD interfaces
 
 EXTRACT_ONLY=
-BUILD_DEPENDS=  ${PYTHON_PKGNAMEPREFIX}six>0:devel/py-six@${FLAVOR}
+BUILD_DEPENDS=  ${PYTHON_PKGNAMEPREFIX}six>0:devel/py-six@${PY_FLAVOR}
 
 WRKSRC=		/usr/nas_source/py-bsd
 
